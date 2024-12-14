@@ -1,0 +1,18 @@
+
+[package]
+name = "ports-info"
+version = "0.1.0"
+edition = "2021"
+authors = ["mFat"]
+license = "GPL-3.0"
+description = "Ports Info - Listening Ports Information"
+
+[dependencies]
+gtk = { version = "0.6", package = "gtk4", features = ["v4_6", "libadwaita"] }
+libadwaita = { git = "https://github.com/gtk-rs/libadwaita-rs", features = ["v1_2"] }
+gio = "0.15"
+glib = "0.15"
+sysinfo = { version = "0.26.4", features = ["serde"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+chrono = "0.4"
