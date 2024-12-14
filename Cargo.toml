@@ -10,8 +10,6 @@ description = "Ports Info - Listening Ports Information"
 gtk4 = "0.7"
 adw = { version = "0.5", package = "libadwaita" }
 sysinfo = "0.29"
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
 chrono = "0.4"
 
 [build-dependencies]
