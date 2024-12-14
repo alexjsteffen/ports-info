@@ -1,11 +1,11 @@
-use gtk::prelude::*;
-use gtk::{gdk, gio, glib, Application, Button, CssProvider, Entry, Orientation, ScrolledWindow, SearchBar, SearchEntry, StyleContext};
-use gtk::{Align, ApplicationWindow, HeaderBar, Label, ListBox, MenuButton, PolicyType, ToggleButton};
+use gtk4::prelude::*;
+use gtk4::{gdk, gio, glib, Application, Button, CssProvider, Entry, Orientation, ScrolledWindow, SearchBar, SearchEntry, StyleContext};
+use gtk4::{Align, ApplicationWindow, HeaderBar, Label, ListBox, MenuButton, PolicyType, ToggleButton, Widget};
 use libadwaita::{self as adw, prelude::*, Banner, ExpanderRow, MessageDialog};
+use sysinfo::{Pid, Process, System, SystemExt};
 use std::cell::RefCell;
 use std::process::Command;
 use std::rc::Rc;
-use sysinfo::{ProcessExt, System, SystemExt};
 
 struct PortData {
     port: String,
@@ -24,6 +24,7 @@ struct PortMonitorWindow {
     all_ports: RefCell<Vec<PortData>>,
     list_box: ListBox,
     search_entry: SearchEntry,
+    search_bar: SearchBar,  // Add this field
     warning_banner: Banner,
     is_root: RefCell<bool>,
 }
@@ -137,6 +138,7 @@ impl PortMonitorWindow {
             all_ports: RefCell::new(Vec::new()),
             list_box,
             search_entry,
+            search_bar,  // Add this field
             warning_banner,
             is_root: RefCell::new(false),
         });
@@ -229,7 +231,7 @@ impl PortMonitorWindow {
         self.list_box.invalidate_filter();
     }
 
-    fn filter_ports(&self, row: &gtk::ListBoxRow) -> bool {
+    fn filter_ports(&self, row: &gtk4::ListBoxRow) -> bool {
         let search_text = self.search_entry.text().to_lowercase();
         if search_text.is_empty() {
             return true;
@@ -255,7 +257,7 @@ impl PortMonitorWindow {
         dialog.present();
     }
 
-    fn create_port_row(&self, port_data: &PortData) -> gtk::Widget {
+    fn create_port_row(&self, port_data: &PortData) -> Widget {
         let row = ExpanderRow::new();
 
         // Set title and subtitle
@@ -324,11 +326,8 @@ impl PortMonitorWindow {
                 // Memory Usage
                 details_box.append(&create_detail_label(&format!("Memory Usage: {:.1} MB", process_info.memory() as f64 / 1024.0 / 1024.0)));
                 // Start Time
-                use chrono::{DateTime, NaiveDateTime, Local};
-                let start_time = NaiveDateTime::from_timestamp_opt(process_info.start_time() as i64, 0);
-                if let Some(time) {
-                    let datetime: DateTime<Local> = DateTime::from_utc(time, Local::now().offset().to_owned());
-                    details_box.append(&create_detail_label(&format!("Started: {}", datetime.format("%Y-%m-%d %H:%M:%S"))));
+                if let Some(start_time) = Self::format_start_time(process_info.start_time() as i64) {
+                    details_box.append(&create_detail_label(&format!("Started: {}", start_time)));
                 }
                 // Status
                 details_box.append(&create_detail_label(&format!("Status: {:?}", process_info.status())));
@@ -454,10 +453,18 @@ impl PortMonitorWindow {
         }
     }
 
-    fn get_process_info(&self, pid: u32) -> Option<Process> {
+    fn get_process_info(&self, pid: u32) -> Option<sysinfo::Process> {
         let mut system = System::new_all();
-        system.refresh_process(pid);
-        system.process(pid).cloned()
+        system.refresh_process(Pid::from(pid as usize));
+        system.process(Pid::from(pid as usize)).map(|p| p.to_owned())
+    }
+
+    // Fix the DateTime handling
+    fn format_start_time(timestamp: i64) -> Option<String> {
+        use chrono::{DateTime, Local, TimeZone};
+        Local.timestamp_opt(timestamp, 0)
+            .single()
+            .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
     }
 }
 
