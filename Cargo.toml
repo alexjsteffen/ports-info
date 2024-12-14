@@ -8,7 +8,7 @@ description = "Ports Info - Listening Ports Information"
 
 [dependencies]
 gtk4 = "0.9"
-libadwaita = { version = "1.3", package = "libadwaita" }
+libadwaita = "0.7.1"
 sysinfo = "0.29"
 chrono = "0.4"
 
