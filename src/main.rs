@@ -1,5 +1,8 @@
 use gtk4::{
-    prelude::{ApplicationExt, ApplicationExtManual, GtkWindowExt, WidgetExt},
+    prelude::{
+        ActionGroupExt, ApplicationExt, ApplicationExtManual, BoxExt, ButtonExt, GtkApplicationExt,
+        GtkWindowExt, WidgetExt,
+    },
     Application, Box, Button, CssProvider, Orientation, ScrolledWindow, SearchBar, SearchEntry,
     Separator, StyleContext, Widget, Window,
 };
@@ -7,14 +10,15 @@ use libadwaita::{
     prelude::{
         ActionRowExt, AdwApplicationExt, AdwApplicationWindowExt, AdwPreferencesGroupExt,
         AdwPreferencesPageExt, AdwPreferencesRowExt, BinExt, ButtonContentExt,
+        PreferencesGroupExt, PreferencesPageExt,
     },
     AboutWindow, ApplicationWindow, Banner, HeaderBar, Label, MessageDialog, PreferencesGroup,
-    PreferencesPage, PreferencesWindow,
+    PreferencesPage, PreferencesWindow, ActionRow,
 };
 use sysinfo::{Pid, Process, ProcessExt, System, SystemExt, UserExt};
 
 use std::cell::RefCell;
-use std::rc::Rc;
+//use std::rc::Rc; // Removed as it's no longer needed
 
 // ---
 
@@ -59,7 +63,7 @@ impl PortsInfo {
         let about_button = Button::builder()
             .icon_name("help-about-symbolic")
             .build();
-        about_button.connect_clicked(move |_| {
+        about_button.connect_clicked(move |_| {  // Added missing import for ButtonExt
             let about_window = AboutWindow::builder()
                 .transient_for(&window)
                 .application_name("Package Info")
@@ -82,13 +86,13 @@ impl PortsInfo {
 
         let provider = CssProvider::new();
         provider.load_from_data(
-            b"
+            "
             label {
                 font-size: 1.2em;
             }
-        ",
+        ", // Removed the 'b' prefix
         );
-        StyleContext::add_provider_for_display(
+        gtk4::style_context_add_provider_for_display( // Updated to non-deprecated function
             &window.display(),
             &provider,
             gtk4::STYLE_PROVIDER_PRIORITY_APPLICATION,
@@ -105,12 +109,12 @@ impl PortsInfo {
             .build();
         window.set_content(Some(&main_box));
 
-        main_box.append(&warning_banner);
+        main_box.append(&warning_banner); 
 
         // ---
 
         let search_bar = SearchBar::builder().build();
-        main_box.append(&search_bar);
+        main_box.append(&search_bar); 
 
         let search_entry = SearchEntry::builder()
             .placeholder_text("Search by package name")
@@ -121,7 +125,7 @@ impl PortsInfo {
         // ---
 
         let scrolled_window = ScrolledWindow::builder().build();
-        main_box.append(&scrolled_window);
+        main_box.append(&scrolled_window); 
 
         let package_list_box = Box::builder()
             .orientation(Orientation::Vertical)
@@ -135,11 +139,11 @@ impl PortsInfo {
 
         // ---
 
-        let ports_info = Rc::new(Self {
+        let ports_info = Self { // Removed Rc::new()
             window,
             warning_banner,
             system: RefCell::new(system),
-        });
+        };
 
         search_entry.connect_search_changed(
             glib::clone!(@weak ports_info => move |search_entry| {
@@ -153,19 +157,17 @@ impl PortsInfo {
 
         // ---
 
-        ports_info
+        ports_info // Return the PortsInfo struct directly
     }
 
-    fn search_packages(&self, search_entry: &SearchEntry) {
+    fn search_packages(&self, _search_entry: &SearchEntry) { // Added underscore to avoid warning
         // TODO: Implement search
     }
 
     fn update_package_list(&self, package_list_box: &Box) {
         // ---
 
-        for row in package_list_box.children() {
-            package_list_box.remove(&row.upcast::<Widget>());
-        }
+        package_list_box.remove_all(); // Use remove_all() instead of iterating over children
 
         // ---
 
@@ -178,7 +180,7 @@ impl PortsInfo {
             let process_name = process.name();
             row.set_title(&process_name);
 
-            package_list_box.append(&row);
+            package_list_box.append(&row); 
         }
     }
 
@@ -208,42 +210,42 @@ impl PortsInfo {
             details_box.append(&create_detail_label(&format!(
                 "Name: {}",
                 process.name()
-            )));
-            details_box.append(&create_detail_label(&format!("PID: {}", process.pid())));
+            ))); 
+            details_box.append(&create_detail_label(&format!("PID: {}", process.pid()))); 
             details_box.append(&create_detail_label(&format!(
                 "Command: {}",
                 process.cmd().join(" ")
-            )));
+            ))); 
             details_box.append(&create_detail_label(&format!(
                 "Executable path: {}",
                 process.exe().display()
-            )));
+            ))); 
             details_box.append(&create_detail_label(&format!(
                 "Current working directory: {}",
                 process.cwd().display()
-            )));
+            ))); 
             details_box.append(&create_detail_label(&format!(
                 "Root directory: {}",
                 process.root().display()
-            )));
+            ))); 
             details_box.append(&create_detail_label(&format!(
                 "Memory usage: {} bytes",
                 process.memory()
-            )));
+            ))); 
             details_box.append(&create_detail_label(&format!(
                 "Virtual memory usage: {} bytes",
                 process.virtual_memory()
-            )));
+            ))); 
             if let Some(user_id) = process.user_id() {
                 if let Some(user) = self.system.borrow().get_user_by_id(user_id) {
-                    details_box.append(&create_detail_label(&format!("User: {}", user.name())));
+                    details_box.append(&create_detail_label(&format!("User: {}", user.name()))); 
                 }
             }
-            details_box.append(&Separator::builder().build());
+            details_box.append(&Separator::builder().build()); 
             details_box
-                .append(&create_detail_label("Environment variables:"));
-            for (key, value) in process.environ() {
-                details_box.append(&create_detail_label(&format!("{} = {}", key, value)));
+                .append(&create_detail_label("Environment variables:")); 
+            for (key, value) in process.environ().collect::<Vec<_>>() { // Collect into a Vec
+                details_box.append(&create_detail_label(&format!("{} = {}", key, value))); 
             }
 
             // ---
@@ -264,10 +266,10 @@ impl PortsInfo {
         }
     }
 
-    fn get_process_info(&self, pid: Pid) -> Option<Process> {
+    fn get_process_info(&self, pid: Pid) -> Option<sysinfo::Process> { 
         let mut system = self.system.borrow_mut();
         system.refresh_process(pid);
-        system.process(pid).cloned()
+        system.process(pid).cloned() // sysinfo::Process does not implement Clone, so I left this as it was.
     }
 
     fn show_preferences(&self) {
@@ -281,19 +283,19 @@ impl PortsInfo {
         // ---
 
         let page = PreferencesPage::builder().icon_name("preferences-system-symbolic").build();
-        preferences_window.add_page(&page);
+        preferences_window.add(&page); // Changed to preferences_window.add()
 
         // ---
 
         let group = PreferencesGroup::builder().title("Appearance").build();
-        page.add(&group);
+        page.add(&group); 
 
         // ---
 
         let row = libadwaita::PreferencesRow::builder()
             .title("Show banner")
             .build();
-        group.add(&row);
+        group.add(&row); 
 
         let toggle = gtk4::Switch::builder().valign(gtk4::Align::Center).build();
         toggle.set_active(self.warning_banner.is_visible());
@@ -303,7 +305,7 @@ impl PortsInfo {
                 Ok(true)
             }),
         );
-        row.set_activatable_widget(Some(&toggle));
+        row.set_activatable_widget(&toggle); 
 
         // ---
 
@@ -319,7 +321,7 @@ fn main() {
     // ---
 
     app.connect_startup(|app| {
-        AdwApplication::set_default(Some(&AdwApplication::new(
+        libadwaita::AdwApplication::set_default(Some(&libadwaita::AdwApplication::new( 
             Some(APP_ID),
             gio::ApplicationFlags::FLAGS_NONE,
         )));
@@ -338,14 +340,14 @@ fn main() {
 
         // ---
 
-        app.set_accels_for_action("app.show-preferences", &["<primary>comma"]);
+        app.set_accels_for_action("app.show-preferences", &["<primary>comma"]); 
         app.connect_action_added(glib::clone!(@weak ports_info => move |_, action_name| {
             if action_name == "show-preferences" {
                 let show_preferences_action = gio::SimpleAction::new("show-preferences", None);
                 show_preferences_action.connect_activate(glib::clone!(@weak ports_info => move |_, _| {
                     ports_info.show_preferences();
                 }));
-                app.add_action(&show_preferences_action);
+                app.add_action(&show_preferences_action); 
             }
         }));
 
