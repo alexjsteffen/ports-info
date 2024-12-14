@@ -1,8 +1,15 @@
 use gtk4::prelude::*;
-use gtk4::{gdk, gio, glib, Application, Button, CssProvider, Entry, Orientation, ScrolledWindow, SearchBar, SearchEntry, StyleContext};
-use gtk4::{Align, ApplicationWindow, HeaderBar, Label, ListBox, MenuButton, PolicyType, ToggleButton, Widget};
-use libadwaita::{self as adw, prelude::*, Banner, ExpanderRow, MessageDialog};
-use sysinfo::{Pid, Process, System, SystemExt};
+use gtk4::{
+    Align, Application, ApplicationWindow, Button, CssProvider, Entry, HeaderBar, Label,
+    ListBox, MenuButton, Orientation, PolicyType, ScrolledWindow, SearchBar, SearchEntry,
+    SelectionMode, Separator, StyleContext, ToggleButton, Widget, WrapMode, STYLE_PROVIDER_PRIORITY_APPLICATION,
+    License, MessageDialog,
+};
+use gtk4::{gdk, gio, glib};
+use libadwaita::{self as adw, prelude::*, AboutWindow, Banner, ExpanderRow};
+use sysinfo::{Pid, Process, ProcessExt, System, SystemExt};
+use glib::Continue;
+use pango;
 use std::cell::RefCell;
 use std::process::Command;
 use std::rc::Rc;
@@ -39,7 +46,7 @@ impl PortMonitorWindow {
             .build();
 
         // Main layout
-        let main_box = gtk::Box::new(Orientation::Vertical, 0);
+        let main_box = Box::new(Orientation::Vertical, 0);
         window.set_child(Some(&main_box));
 
         // Header bar
@@ -95,13 +102,13 @@ impl PortMonitorWindow {
         main_box.append(&scrolled);
 
         let list_box = ListBox::new();
-        list_box.set_selection_mode(gtk::SelectionMode::None);
+        list_box.set_selection_mode(SelectionMode::None);
         scrolled.set_child(Some(&list_box));
 
         // CSS styling
         let provider = CssProvider::new();
         provider.load_from_data(
-            b"
+            "
             .error {
                 background-color: #f44336;
                 color: white;
@@ -130,7 +137,7 @@ impl PortMonitorWindow {
         StyleContext::add_provider_for_display(
             &gdk::Display::default().unwrap(),
             &provider,
-            gtk::STYLE_PROVIDER_PRIORITY_APPLICATION,
+            STYLE_PROVIDER_PRIORITY_APPLICATION,
         );
 
         let self_ref = Rc::new(Self {
@@ -163,7 +170,7 @@ impl PortMonitorWindow {
         let self_clone = Rc::clone(&self_ref);
         glib::idle_add_local(move || {
             self_clone.load_privileged_data();
-            glib::Continue(false)
+            Continue(false)
         });
 
         self_ref
@@ -266,17 +273,17 @@ impl PortMonitorWindow {
             port_data.protocol.to_uppercase(),
             port_data.port
         );
-        row.set_title(Some(&title));
+        row.set_title(&title);
 
         let subtitle = if let Some(pid) = port_data.pid {
             format!("{} (PID: {})", port_data.name, pid)
         } else {
             port_data.name.clone()
         };
-        row.set_subtitle(Some(&subtitle));
+        row.set_subtitle(&subtitle);
 
         // Details box
-        let details_box = gtk::Box::new(Orientation::Vertical, 6);
+        let details_box = Box::new(Orientation::Vertical, 6);
         details_box.set_margin_start(12);
         details_box.set_margin_end(12);
         details_box.set_margin_top(6);
@@ -290,7 +297,7 @@ impl PortMonitorWindow {
                 .xalign(0.0)
                 .build();
             label.set_wrap(true);
-            label.set_wrap_mode(pango::WrapMode::WordChar);
+            label.set_wrap_mode(WrapMode::WordChar);
             label.set_hexpand(true);
             label.add_css_class("white");
             label
@@ -306,14 +313,14 @@ impl PortMonitorWindow {
         if let Some(pid) = port_data.pid {
             if let Some(process_info) = self.get_process_info(pid) {
                 // Separator
-                let separator = gtk::Separator::new(Orientation::Horizontal);
+                let separator = Separator::new(Orientation::Horizontal);
                 separator.add_css_class("white");
                 separator.set_margin_top(6);
                 separator.set_margin_bottom(6);
                 details_box.append(&separator);
 
                 // Command
-                let cmdline = process_info.cmd().to_string_lossy();
+                let cmdline = process_info.cmd().join(" ");
                 if !cmdline.is_empty() {
                     details_box.append(&create_detail_label(&format!("Command: {}", cmdline)));
                 }
@@ -342,7 +349,7 @@ impl PortMonitorWindow {
             .build();
 
         row.add_row(&scrolled);
-        row.upcast::<gtk::Widget>()
+        row.upcast::<Widget>()
     }
 
     fn parse_netstat_output(&self, output: &str, privileged: bool) {
@@ -446,17 +453,20 @@ impl PortMonitorWindow {
     }
 
     fn refresh_display(&self) {
-        self.list_box.foreach(|child| self.list_box.remove(child));
+        let children: Vec<_> = self.list_box.children().collect();
+        for child in children {
+            self.list_box.remove(&child);
+        }
         for port_data in self.all_ports.borrow().iter() {
             let row = self.create_port_row(port_data);
             self.list_box.append(&row);
         }
     }
 
-    fn get_process_info(&self, pid: u32) -> Option<sysinfo::Process> {
+    fn get_process_info(&self, pid: u32) -> Option<Process> {
         let mut system = System::new_all();
-        system.refresh_process(Pid::from(pid as usize));
-        system.process(Pid::from(pid as usize)).map(|p| p.to_owned())
+        system.refresh_process(Pid::from(pid));
+        system.process(Pid::from(pid)).cloned()
     }
 
     // Fix the DateTime handling
@@ -480,14 +490,14 @@ fn main() {
 
     // Set up "about" action
     let about_action = gio::SimpleAction::new("about", None);
-    about_action.connect_activate(|action, _param| {
-        let about = adw::AboutWindow::builder()
+    about_action.connect_activate(|_, _| {
+        let about = AboutWindow::builder()
             .application_name("PortsInfo")
             .application_icon("security-medium")
             .developer_name("mFat")
             .version("1.0")
             .website("https://github.com/mfat/ports")
-            .license_type(gtk::License::Gpl30)
+            .license_type(License::Gpl30)
             .developers(vec!["mFat".to_string()])
             .copyright("2024 mFat")
             .build();
