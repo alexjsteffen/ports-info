@@ -1,15 +1,8 @@
 use gtk4::prelude::*;
-use gtk4::{
-    Align, Application, ApplicationWindow, Button, CssProvider, Entry, HeaderBar, Label,
-    ListBox, MenuButton, Orientation, PolicyType, ScrolledWindow, SearchBar, SearchEntry,
-    SelectionMode, Separator, StyleContext, ToggleButton, Widget, WrapMode, STYLE_PROVIDER_PRIORITY_APPLICATION,
-    License, MessageDialog,
-};
-use gtk4::{gdk, gio, glib};
-use libadwaita::{self as adw, prelude::*, AboutWindow, Banner, ExpanderRow};
-use sysinfo::{Pid, Process, ProcessExt, System, SystemExt};
-use glib::Continue;
-use pango;
+use gtk4::{gdk, gio, glib, Application, Box, Button, ButtonsType, CssProvider, Orientation, ScrolledWindow, SearchBar, SearchEntry, Separator, StyleContext, Widget, SelectionMode, WrapMode};
+use gtk4::{ApplicationWindow, HeaderBar, Label, ListBox, MenuButton, PolicyType, ToggleButton, MessageDialog};
+use libadwaita::{self as adw, prelude::*, ExpanderRow};
+use sysinfo::{Pid, System, SystemExt, ProcessExt};
 use std::cell::RefCell;
 use std::process::Command;
 use std::rc::Rc;
@@ -31,8 +24,8 @@ struct PortMonitorWindow {
     all_ports: RefCell<Vec<PortData>>,
     list_box: ListBox,
     search_entry: SearchEntry,
-    search_bar: SearchBar,  // Add this field
-    warning_banner: Banner,
+    search_bar: SearchBar,
+    warning_banner: adw::Banner,
     is_root: RefCell<bool>,
 }
 
@@ -78,7 +71,7 @@ impl PortMonitorWindow {
         header.pack_end(&menu_button);
 
         // Warning banner
-        let warning_banner = Banner::builder()
+        let warning_banner = adw::Banner::builder()
             .title("Limited port information: Running without administrative privileges")
             .build();
         warning_banner.add_css_class("error");
@@ -132,12 +125,12 @@ impl PortMonitorWindow {
                 font-weight: bold;
                 font-size: 1.2em;
             }
-            ",
+            "
         );
         StyleContext::add_provider_for_display(
             &gdk::Display::default().unwrap(),
             &provider,
-            STYLE_PROVIDER_PRIORITY_APPLICATION,
+            gtk4::STYLE_PROVIDER_PRIORITY_APPLICATION,
         );
 
         let self_ref = Rc::new(Self {
@@ -145,7 +138,7 @@ impl PortMonitorWindow {
             all_ports: RefCell::new(Vec::new()),
             list_box,
             search_entry,
-            search_bar,  // Add this field
+            search_bar,
             warning_banner,
             is_root: RefCell::new(false),
         });
@@ -168,9 +161,8 @@ impl PortMonitorWindow {
 
         // Load port data
         let self_clone = Rc::clone(&self_ref);
-        glib::idle_add_local(move || {
+        glib::idle_add_local_once(move || {
             self_clone.load_privileged_data();
-            Continue(false)
         });
 
         self_ref
@@ -297,7 +289,7 @@ impl PortMonitorWindow {
                 .xalign(0.0)
                 .build();
             label.set_wrap(true);
-            label.set_wrap_mode(WrapMode::WordChar);
+            label.set_wrap_mode(gtk4::WrapMode::WordChar);
             label.set_hexpand(true);
             label.add_css_class("white");
             label
@@ -311,6 +303,7 @@ impl PortMonitorWindow {
 
         // Process details (if available)
         if let Some(pid) = port_data.pid {
+            let mut system = System::new_all();
             if let Some(process_info) = self.get_process_info(pid) {
                 // Separator
                 let separator = Separator::new(Orientation::Horizontal);
@@ -325,8 +318,10 @@ impl PortMonitorWindow {
                     details_box.append(&create_detail_label(&format!("Command: {}", cmdline)));
                 }
                 // User
-                if let Some(username) = process_info.user_name() {
-                    details_box.append(&create_detail_label(&format!("User: {}", username)));
+                if let Some(uid) = process_info.user_id() {
+                    if let Some(user) = system.get_user_by_id(uid) {
+                        details_box.append(&create_detail_label(&format!("User: {}", user.name())));
+                    }
                 }
                 // CPU Usage
                 details_box.append(&create_detail_label(&format!("CPU Usage: {:.1}%", process_info.cpu_usage())));
@@ -349,7 +344,7 @@ impl PortMonitorWindow {
             .build();
 
         row.add_row(&scrolled);
-        row.upcast::<Widget>()
+        row.upcast::<gtk::Widget>()
     }
 
     fn parse_netstat_output(&self, output: &str, privileged: bool) {
@@ -453,8 +448,7 @@ impl PortMonitorWindow {
     }
 
     fn refresh_display(&self) {
-        let children: Vec<_> = self.list_box.children().collect();
-        for child in children {
+        while let Some(child) = self.list_box.first_child() {
             self.list_box.remove(&child);
         }
         for port_data in self.all_ports.borrow().iter() {
@@ -463,10 +457,10 @@ impl PortMonitorWindow {
         }
     }
 
-    fn get_process_info(&self, pid: u32) -> Option<Process> {
+    fn get_process_info(&self, pid: u32) -> Option<sysinfo::Process> {
         let mut system = System::new_all();
-        system.refresh_process(Pid::from(pid));
-        system.process(Pid::from(pid)).cloned()
+        system.refresh_process(Pid::from(pid as usize));
+        system.process(Pid::from(pid as usize)).map(|p| p.to_owned())
     }
 
     // Fix the DateTime handling
@@ -490,19 +484,6 @@ fn main() {
 
     // Set up "about" action
     let about_action = gio::SimpleAction::new("about", None);
-    about_action.connect_activate(|_, _| {
-        let about = AboutWindow::builder()
-            .application_name("PortsInfo")
-            .application_icon("security-medium")
-            .developer_name("mFat")
-            .version("1.0")
-            .website("https://github.com/mfat/ports")
-            .license_type(License::Gpl30)
-            .developers(vec!["mFat".to_string()])
-            .copyright("2024 mFat")
-            .build();
-        about.show();
-    });
     app.add_action(&about_action);
 
     app.run();
